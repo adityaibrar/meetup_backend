@@ -3,9 +3,12 @@ package main
 import (
 	"log"
 	"meetup_backend/config"
+	"meetup_backend/middleware"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/logger"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func main() {
@@ -33,11 +36,37 @@ func main() {
 		},
 	})
 
-	app.Use(logger.New(logger.Config{
-		Format:     "[${time}] ${status} - ${method} ${path} - ${ip} - ${latency}\n",
-		TimeFormat: "2006-01-02 15:04:05",
-		TimeZone:   "Local",
-	}))
+	// Database Configuration
+	gormConfig := &gorm.Config{}
+	if cfg.Debug {
+		gormConfig.Logger = logger.Default.LogMode(logger.Info)
+	} else {
+		gormConfig.Logger = logger.Default.LogMode(logger.Silent)
+	}
+	db, err := gorm.Open(mysql.Open(cfg.DatabaseURL), gormConfig)
+	if err != nil {
+		log.Fatal("Failed to connect to database:", err)
+	}
+
+	sqlDb, err := db.DB()
+	if err != nil {
+		log.Fatal("Failed to get database instance:", err)
+	}
+
+	// Set database connection pool settings
+	sqlDb.SetMaxOpenConns(100)
+	sqlDb.SetMaxIdleConns(10)
+
+	// Run Migrations
+
+	if err := config.Migrate(db); err != nil {
+		log.Fatal("Failed to migrate database:", err)
+	}
+
+	// Logger Middleware
+	middleware.SetupMiddleware(app)
+
+	// Global Error Handler
 
 	// Health Check Endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -46,6 +75,7 @@ func main() {
 			"message": "API is healthy",
 		})
 	})
+	middleware.SetupErrorHandler(app)
 
 	log.Printf("🚀 Server starting on host %s in port %s mode", cfg.HOST, cfg.AppPort)
 

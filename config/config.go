@@ -12,6 +12,8 @@ type Config struct {
 	HOST        string
 	DatabaseURL string
 
+	Debug bool
+
 	// JWT Settings
 	JWTSecret     string
 	JWTExpiration string
@@ -30,10 +32,11 @@ func LoadConfig() *Config {
 	}
 
 	config := &Config{
-		AppPort:       os.Getenv("PORT"),
-		DatabaseURL:   os.Getenv("DATABASE_URL"),
-		HOST:          os.Getenv("HOST"),
-		
+		AppPort:     os.Getenv("PORT"),
+		DatabaseURL: os.Getenv("DATABASE_URL"),
+		HOST:        os.Getenv("HOST"),
+		Debug:       true,
+
 		JWTSecret:     os.Getenv("JWT_SECRET"),
 		JWTExpiration: os.Getenv("JWT_EXPIRES_IN"),
 
