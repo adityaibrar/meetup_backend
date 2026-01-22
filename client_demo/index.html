@@ -1,15 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meetup Chat Demo</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="container">
         <h1>Meetup Chat</h1>
-        
+
         <!-- Auth Section -->
         <div id="auth-section">
             <div class="tabs">
@@ -46,6 +48,10 @@
             </div>
 
             <div id="chat-window" class="hidden">
+                <div class="chat-header">
+                    <span id="chat-title">Chat</span>
+                    <span id="chat-status" class="status-indicator offline">● Offline</span>
+                </div>
                 <div id="messages-container">
                     <!-- Messages will appear here -->
                 </div>
@@ -59,4 +65,5 @@
 
     <script src="app.js"></script>
 </body>
+
 </html>

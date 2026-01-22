@@ -53,10 +53,15 @@ A simple **HTML/JS Client Demo** is also included.
 
 ## 📖 API Usage
 
+**Base URL**: `http://localhost:8000`
+
 ### 1. Authentication
 
 #### Register
-- **Endpoint**: `POST /api/auth/register`
+Create a new user account.
+- **URL**: `/api/auth/register`
+- **Method**: `POST`
+- **Headers**: `Content-Type: application/json`
 - **Body**:
   ```json
   {
@@ -66,9 +71,19 @@ A simple **HTML/JS Client Demo** is also included.
     "full_name": "User Three"
   }
   ```
+- **Response (201 Created)**:
+  ```json
+  {
+    "message": "User registered successfully",
+    "user": { ... }
+  }
+  ```
 
 #### Login
-- **Endpoint**: `POST /api/auth/login`
+Authenticate and receive a JWT token.
+- **URL**: `/api/auth/login`
+- **Method**: `POST`
+- **Headers**: `Content-Type: application/json`
 - **Body**:
   ```json
   {
@@ -76,68 +91,106 @@ A simple **HTML/JS Client Demo** is also included.
     "password": "password123"
   }
   ```
-- **Response**: Returns a `token` (JWT).
+- **Response (200 OK)**:
+  ```json
+  {
+    "status": "success",
+    "token": "eyJhbGciOiJIUzI1...",
+    "user": {
+      "id": 1,
+      "email": "user1@example.com",
+      "username": "user1"
+    }
+  }
+  ```
 
 ### 2. Chat
 
 #### Initialize Private Chat
-Creates or retrieves a chat room with another user.
-- **Endpoint**: `POST /api/chat/private`
-- **Header**: `Authorization: Bearer <TOKEN>`
+Check if a private chat room exists with a user, or create one if not.
+- **URL**: `/api/chat/private`
+- **Method**: `POST`
+- **Headers**: 
+  - `Content-Type: application/json`
+  - `Authorization: Bearer <YOUR_JWT_TOKEN>`
 - **Body**:
   ```json
   {
     "target_user_id": 2
   }
   ```
-- **Response**: `{ "room_id": 1, "created": false }`
+- **Response (200 OK / 201 Created)**:
+  ```json
+  {
+    "room_id": 1,
+    "created": false
+  }
+  ```
 
 ### 3. WebSocket
 
-- **URL**: `ws://localhost:8000/ws?token=<JWT_TOKEN>`
-- **Events (JSON)**:
+Connect to the real-time chat server.
 
-  **Send Message (Client -> Server):**
-  ```json
-  {
-    "type": "chat",
-    "chat_room_id": 1,
-    "content": "Hello World"
-  }
-  ```
+- **URL**: `ws://localhost:8000/ws?token=<YOUR_JWT_TOKEN>`
+- **Method**: `GET` (WebSocket Upgrade)
 
-  **Receive Message (Server -> Client):**
-  ```json
-  {
-    "type": "chat",
-    "message": {
-        "id": 12,
-        "content": "Hello World",
-        "sender_id": 1
-    }
-  }
-  ```
+#### Events (Received from Server)
 
-  **Send Read Receipt (Client -> Server):**
-  *Automatically sent by client when displaying a message.*
-  ```json
-  {
-    "type": "read",
-    "message_id": 12
+**1. Incoming Message**
+Received when someone sends you a message.
+```json
+{
+  "type": "chat",
+  "message": {
+      "id": 12,
+      "chat_room_id": 1,
+      "sender_id": 1,
+      "content": "Hello World",
+      "created_at": "2026-01-22T10:00:00Z"
   }
-  ```
-  *Effect: The message is permanently deleted from the database.*
+}
+```
 
-  **Receive Read Receipt (Server -> Client):**
-  *Sent to the Sender when their message is read/deleted.*
-  ```json
-  {
-    "type": "read_receipt",
-    "message_id": 12,
-    "chat_room_id": 1,
-    "read_by": 2
-  }
-  ```
+**2. Read Receipt Notification**
+Received when your message has been read by the recipient (and thus deleted).
+```json
+{
+  "type": "read_receipt",
+  "message_id": 12,
+  "chat_room_id": 1,
+  "read_by": 2
+}
+```
+
+**3. User Status Update**
+Received when a user comes online or goes offline.
+```json
+{
+  "type": "user_status",
+  "user_id": 2,
+  "is_online": true
+}
+```
+
+#### Events (Sent by Client)
+
+**1. Send Message**
+```json
+{
+  "type": "chat",
+  "chat_room_id": 1,
+  "content": "Hello User 2"
+}
+```
+
+**2. Send Read Receipt**
+Send this when the user views the message. This triggers the ephemeral "Delete on Read" logic.
+```json
+{
+  "type": "read",
+  "message_id": 12
+}
+```
 
 ## 🖥 Client Demo
 
@@ -149,11 +202,13 @@ A standalone HTML client is located in `client_demo/`.
 3.  **Login** as `user1@example.com` in Window A.
 4.  **Login** as `user2@example.com` in Window B.
 5.  **Window A**: Enter User ID `2` and click **Start Chat**.
+    *   *Note: User 2's status (Online/Offline) will appear in the header.*
 6.  **Window B**: Enter User ID `1` and click **Start Chat**.
 7.  Send messages!
 
 ### What you will see:
-- **Grey Ticks**: Message sent.
-- **Blue Ticks**: Message read by recipient (and deleted from DB).
-- **Offline Messages**: If you send a message to an offline user, they will receive it immediately upon connecting.
+- **Grey Ticks (✓✓)**: Message sent.
+- **Blue Ticks (✓✓)**: Message read by recipient.
+- **Offline Messages**: If recipient is offline, they receive messages upon connecting.
+- **Presence**: Green "Online" indicator updates in real-time.
 

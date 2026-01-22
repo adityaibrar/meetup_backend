@@ -110,6 +110,31 @@ button:hover {
     gap: 10px;
 }
 
+/* Status Indicator */
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+.status-indicator {
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+.status-indicator.online {
+    color: #4CAF50;
+    /* Green */
+}
+
+.status-indicator.offline {
+    color: #ccc;
+    /* Grey */
+}
+
 /* Read Receipts */
 .ticks {
     font-size: 0.7rem;

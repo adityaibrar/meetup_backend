@@ -89,7 +89,13 @@ async function startChat() {
         if (!res.ok) throw new Error(data.error);
 
         state.activeRoom = data.room_id;
+        currentChatUserId = targetUserId; // Track who we are chatting with
+
         document.getElementById('chat-window').classList.remove('hidden');
+        document.getElementById('chat-title').textContent = `Chat with User ${targetUserId}`;
+
+        // Check current status if known, else default to offline
+        updateStatusUI(userStatusMap[targetUserId] || false);
 
         // Connect WS if not already connected
         if (!state.ws) connectWebSocket();
@@ -166,6 +172,35 @@ function handleIncomingMessage(msg) {
         }
     } else if (msg.type === 'read_receipt') {
         markMessageAsRead(msg.message_id);
+    } else if (msg.type === 'user_status') {
+        updateUserStatus(msg.user_id, msg.is_online);
+    }
+}
+
+// Map to store user status
+// In a real app we would fetch initial status
+let userStatusMap = {};
+let currentChatUserId = null;
+
+function updateUserStatus(userId, isOnline) {
+    userStatusMap[userId] = isOnline;
+
+    // If we are currently chatting with this user, update UI
+    if (currentChatUserId === userId) {
+        updateStatusUI(isOnline);
+    }
+}
+
+function updateStatusUI(isOnline) {
+    const statusEl = document.getElementById('chat-status');
+    if (statusEl) {
+        if (isOnline) {
+            statusEl.textContent = '● Online';
+            statusEl.className = 'status-indicator online';
+        } else {
+            statusEl.textContent = '● Offline';
+            statusEl.className = 'status-indicator offline';
+        }
     }
 }
 

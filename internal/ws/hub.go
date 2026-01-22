@@ -1,7 +1,9 @@
 package ws
 
 import (
+	"encoding/json"
 	"log"
+	"meetup_backend/models"
 	"sync"
 )
 
@@ -67,7 +69,28 @@ func (h *Hub) limitRegister(client *Client) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	h.userClients[client.UserID] = append(h.userClients[client.UserID], client)
-	log.Printf("User %d connected. Total connections for user: %d", client.UserID, len(h.userClients[client.UserID]))
+
+	count := len(h.userClients[client.UserID])
+	log.Printf("User %d connected. Total connections for user: %d", client.UserID, count)
+
+	// Update DB Status to Online (if first connection)
+	// Or just always update to be safe
+	if client.DB != nil {
+		client.DB.Model(&models.User{}).Where("id = ?", client.UserID).Update("is_online", true)
+	}
+
+	// Broadcast Status Change (Online)
+	// We broadcast to EVERYONE so they know this user is online
+	statusJSON, _ := json.Marshal(map[string]interface{}{
+		"type":      "user_status",
+		"user_id":   client.UserID,
+		"is_online": true,
+	})
+
+	// FIX: Use goroutine to avoid deadlock with the main Hub loop
+	go func() {
+		h.Broadcast <- statusJSON
+	}()
 }
 
 // limitUnregister removes a client from the specific user map
@@ -84,10 +107,31 @@ func (h *Hub) limitUnregister(client *Client) {
 		}
 	}
 
-	if len(h.userClients[client.UserID]) == 0 {
+	count := len(h.userClients[client.UserID])
+	if count == 0 {
 		delete(h.userClients, client.UserID)
+
+		// Update DB Status to Offline
+		if client.DB != nil {
+			client.DB.Model(&models.User{}).Where("id = ?", client.UserID).Update("is_online", false)
+		}
+
+		// Broadcast Status Change (Offline)
+		statusJSON, _ := json.Marshal(map[string]interface{}{
+			"type":      "user_status",
+			"user_id":   client.UserID,
+			"is_online": false,
+		})
+
+		// FIX: Use goroutine to avoid deadlock
+		go func() {
+			h.Broadcast <- statusJSON
+		}()
+
+		log.Printf("User %d disconnected (Offline)", client.UserID)
+	} else {
+		log.Printf("User %d disconnected (Still has %d connections)", client.UserID, count)
 	}
-	log.Printf("User %d disconnected", client.UserID)
 }
 
 // SendToUser sends a message to a specific user (all their active connections)
