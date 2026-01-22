@@ -15,9 +15,9 @@ type User struct {
 	Password string `gorm:"not null" json:"-"`
 
 	// Profil
-	FullName string `gorm:"size:100" json:"full_name"`
-	Phone    string `gorm:"unique;size:20" json:"phone"`
-	ImageURL string `json:"image_url"`
+	FullName string  `gorm:"size:100" json:"full_name"`
+	Phone    *string `gorm:"unique;size:20" json:"phone"`
+	ImageURL string  `json:"image_url"`
 
 	// Role & Status
 	Role       string `gorm:"default:'user';size:20" json:"role"` // user, admin, moderator
