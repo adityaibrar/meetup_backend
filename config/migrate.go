@@ -46,6 +46,9 @@ func ResetAndMigrate(db *gorm.DB) error {
 		return err
 	}
 
+	// Seed Users
+	SeedUsers(db)
+
 	log.Println("Database reset and migration completed successfully.")
 	return nil
 }

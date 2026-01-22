@@ -12,8 +12,8 @@ type ChatRoom struct {
 	Type string  `gorm:"default:'private'" json:"type"` // 'private' (1-on-1) atau 'group'
 
 	// Field optimasi untuk menampilkan list chat (agar tidak perlu query message terakhir terus menerus)
-	LastMessageContent string    `gorm:"type:text" json:"last_message"`
-	LastMessageAt      time.Time `json:"last_message_at"`
+	LastMessageContent string     `gorm:"type:text" json:"last_message"`
+	LastMessageAt      *time.Time `json:"last_message_at"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

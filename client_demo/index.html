@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meetup Chat Demo</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Meetup Chat</h1>
+        
+        <!-- Auth Section -->
+        <div id="auth-section">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="showTab('login')">Login</button>
+                <button class="tab-btn" onclick="showTab('register')">Register</button>
+            </div>
+
+            <div id="login-form" class="auth-form">
+                <input type="email" id="login-email" placeholder="Email" value="user1@example.com">
+                <input type="password" id="login-password" placeholder="Password" value="password123">
+                <button onclick="login()">Login</button>
+            </div>
+
+            <div id="register-form" class="auth-form hidden">
+                <input type="text" id="reg-username" placeholder="Username">
+                <input type="email" id="reg-email" placeholder="Email">
+                <input type="text" id="reg-fullname" placeholder="Full Name">
+                <input type="password" id="reg-password" placeholder="Password">
+                <button onclick="register()">Register</button>
+            </div>
+            <div id="auth-error" class="error"></div>
+        </div>
+
+        <!-- Chat Section -->
+        <div id="chat-section" class="hidden">
+            <div class="header">
+                <span id="user-display">Logged in as: ...</span>
+                <button onclick="logout()">Logout</button>
+            </div>
+
+            <div class="room-controls">
+                <input type="number" id="target-user-id" placeholder="Target User ID (e.g. 2)">
+                <button onclick="startChat()">Start Chat</button>
+            </div>
+
+            <div id="chat-window" class="hidden">
+                <div id="messages-container">
+                    <!-- Messages will appear here -->
+                </div>
+                <div class="input-area">
+                    <input type="text" id="message-input" placeholder="Type a message...">
+                    <button onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
