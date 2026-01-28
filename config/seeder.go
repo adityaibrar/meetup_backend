@@ -47,3 +47,65 @@ func SeedUsers(db *gorm.DB) {
 
 	log.Println("✅ Seeding complete.")
 }
+
+func SeedProducts(db *gorm.DB) {
+	log.Println("🌱 Seeding products...")
+
+	var user1, user2 models.User
+	if err := db.Where("username = ?", "user1").First(&user1).Error; err != nil {
+		log.Printf("Error finding user1: %v", err)
+		return
+	}
+	if err := db.Where("username = ?", "user2").First(&user2).Error; err != nil {
+		log.Printf("Error finding user2: %v", err)
+		return
+	}
+
+	products := []models.Product{
+		{
+			SellerID:    user1.ID,
+			Title:       "Es Joshua",
+			Description: "Segar dan nikmat",
+			Price:       5000,
+			Category:    "beverages",
+			Condition:   "new",
+			Status:      "available",
+		},
+		{
+			SellerID:    user1.ID,
+			Title:       "Es Nutrisari",
+			Description: "Jeruk peras asli",
+			Price:       3500,
+			Category:    "beverages",
+			Condition:   "new",
+			Status:      "available",
+		},
+		{
+			SellerID:    user2.ID,
+			Title:       "Nasi Kucing",
+			Description: "Porsi pas untuk sarapan",
+			Price:       5000,
+			Category:    "food",
+			Condition:   "new",
+			Status:      "available",
+		},
+		{
+			SellerID:    user2.ID,
+			Title:       "Sate Satean",
+			Description: "Sate angkringan mantap",
+			Price:       2000,
+			Category:    "food",
+			Condition:   "new",
+			Status:      "available",
+		},
+	}
+
+	for _, p := range products {
+		if err := db.Create(&p).Error; err != nil {
+			log.Printf("Failed to seed product %s: %v", p.Title, err)
+		} else {
+			log.Printf("Product seeded: %s (ID: %d)", p.Title, p.ID)
+		}
+	}
+	log.Println("✅ Product seeding complete.")
+}

@@ -4,6 +4,7 @@ import (
 	"log"
 	"meetup_backend/internal/ws"
 	"meetup_backend/models"
+	"time"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
@@ -138,6 +139,43 @@ func (h *ChatHandler) InitPrivateChat(c *fiber.Ctx) error {
 	})
 }
 
+// GetMyChats returns all chat rooms for the current user with latest message
+func (h *ChatHandler) GetMyChats(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(uint)
+
+	type ChatRoomResult struct {
+		ID                 uint       `json:"id"`
+		Type               string     `json:"type"`
+		Name               *string    `json:"name"`
+		LastMessageContent string     `json:"last_message"`
+		LastMessageAt      *time.Time `json:"last_message_at"`
+		OtherUserID        uint       `json:"other_user_id"`
+		OtherUsername      string     `json:"other_username"`
+		OtherImageURL      string     `json:"other_image_url"`
+	}
+
+	var results []ChatRoomResult
+
+	// Complex query to get rooms and the OTHER participant info for private chats
+	query := `
+		SELECT 
+			cr.id, cr.type, cr.name, cr.last_message_content, cr.last_message_at,
+			u.id as other_user_id, u.username as other_username, u.image_url as other_image_url
+		FROM chat_rooms cr
+		JOIN chat_participants cp ON cr.id = cp.chat_room_id
+		LEFT JOIN chat_participants cp_other ON cr.id = cp_other.chat_room_id AND cp_other.user_id != ?
+		LEFT JOIN users u ON cp_other.user_id = u.id
+		WHERE cp.user_id = ?
+		ORDER BY cr.last_message_at DESC
+	`
+
+	if err := h.DB.Raw(query, userID, userID).Scan(&results).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch chats"})
+	}
+
+	return c.JSON(fiber.Map{"data": results})
+}
+
 // GetChatMessages retrieves messages for a specific chat room
 func (h *ChatHandler) GetChatMessages(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(uint)
@@ -173,6 +211,23 @@ func (h *ChatHandler) GetChatMessages(c *fiber.Ctx) error {
 
 	// Reverse to Oldest First for Chat UI usually, or keep Newest First and Client reverses
 	// Let's keep Newest First (Desc) as it's standard for pagination, Client should handle display order.
+
+	// Delete retrieved messages to save resources as requested (Ephemeral-like)
+	// We only delete messages that strictly match the fetch criteria to avoid deleting unread ones if logic differs,
+	// but here we just delete what we found.
+	if len(messages) > 0 {
+		var messageIDs []uint
+		for _, m := range messages {
+			messageIDs = append(messageIDs, m.ID)
+		}
+		// Hard delete to save space
+		if err := h.DB.Unscoped().Delete(&models.Message{}, messageIDs).Error; err != nil {
+			log.Printf("Failed to delete fetched messages: %v", err)
+			// Non-blocking error
+		} else {
+			log.Printf("Deleted %d fetched messages from DB to save resources", len(messages))
+		}
+	}
 
 	return c.JSON(fiber.Map{
 		"messages": messages,
@@ -233,5 +288,38 @@ func (h *ChatHandler) GetRoomStatus(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"room_id":  roomID,
 		"statuses": statuses,
+	})
+}
+
+// DeleteChat removes the user from the chat conversation (leaves it)
+func (h *ChatHandler) DeleteChat(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(uint)
+	roomID, err := c.ParamsInt("roomID")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid room ID"})
+	}
+
+	// Usually "Delete Chat" means clearing history for the user or leaving the group.
+	// For private chat, we can just remove the participant entry or flag it as 'hidden'/'deleted'.
+	// If we remove participant, they won't see it in list.
+	// If they message again, a new participant entry is created (or room reused).
+
+	// Check if user is participant
+	var participant models.ChatParticipant
+	if err := h.DB.Where("chat_room_id = ? AND user_id = ?", roomID, userID).First(&participant).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Chat not found or not a participant"})
+	}
+
+	// Delete participant entry
+	if err := h.DB.Delete(&participant).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete chat"})
+	}
+
+	// Optional: If no participants left, delete room?
+	// Usually keep room for the other user.
+	// If type is private, the room persists for the other user.
+
+	return c.JSON(fiber.Map{
+		"message": "Chat deleted successfully",
 	})
 }

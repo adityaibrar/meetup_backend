@@ -264,16 +264,25 @@ func (c *Client) processChatMessage(wsMsg *WSMessage) {
 			return
 		}
 
-		// Echo back to sender so they see it (Unread) and have the ID for future read receipt
+		// Construct response for both Sender (Echo) and Recipient (Notification/Update)
 		responseJSON, _ := json.Marshal(map[string]interface{}{
 			"type":         "chat",
 			"message":      newMsg,
 			"sender_id":    c.UserID,
 			"chat_room_id": wsMsg.ChatRoomID,
 		})
+
+		// Echo back to sender so they see it (Unread) and have the ID for future read receipt
 		c.Send <- responseJSON
 
-		log.Printf("Message saved to DB (ID: %d) - recipient will fetch when joining room", newMsg.ID)
+		// NEW: Always send to recipient if they are online, even if not "in room"
+		// This ensures real-time updates for list view or if they are actually in room (false negative)
+		if recipientID != 0 {
+			c.Hub.SendToUser(recipientID, responseJSON)
+			log.Printf("Message saved to DB AND sent to recipient %d (Real-time delivery)", recipientID)
+		} else {
+			log.Printf("Message saved to DB (ID: %d) - Recipient ID 0??", newMsg.ID)
+		}
 	}
 }
 
