@@ -152,6 +152,7 @@ func (h *ChatHandler) GetMyChats(c *fiber.Ctx) error {
 		OtherUserID        uint       `json:"other_user_id"`
 		OtherUsername      string     `json:"other_username"`
 		OtherImageURL      string     `json:"other_image_url"`
+		UnreadCount        int64      `json:"unread_count"`
 	}
 
 	var results []ChatRoomResult
@@ -160,7 +161,14 @@ func (h *ChatHandler) GetMyChats(c *fiber.Ctx) error {
 	query := `
 		SELECT 
 			cr.id, cr.type, cr.name, cr.last_message_content, cr.last_message_at,
-			u.id as other_user_id, u.username as other_username, u.image_url as other_image_url
+			u.id as other_user_id, u.username as other_username, u.image_url as other_image_url,
+			(
+				SELECT COUNT(*) 
+				FROM messages m 
+				WHERE m.chat_room_id = cr.id 
+				AND m.is_read = false 
+				AND m.sender_id != ?
+			) as unread_count
 		FROM chat_rooms cr
 		JOIN chat_participants cp ON cr.id = cp.chat_room_id
 		LEFT JOIN chat_participants cp_other ON cr.id = cp_other.chat_room_id AND cp_other.user_id != ?
@@ -169,7 +177,7 @@ func (h *ChatHandler) GetMyChats(c *fiber.Ctx) error {
 		ORDER BY cr.last_message_at DESC
 	`
 
-	if err := h.DB.Raw(query, userID, userID).Scan(&results).Error; err != nil {
+	if err := h.DB.Raw(query, userID, userID, userID).Scan(&results).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch chats"})
 	}
 

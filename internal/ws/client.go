@@ -284,6 +284,15 @@ func (c *Client) processChatMessage(wsMsg *WSMessage) {
 			log.Printf("Message saved to DB (ID: %d) - Recipient ID 0??", newMsg.ID)
 		}
 	}
+
+	// 5. Update Chat Room Metadata (Last Message & Time)
+	// This is crucial for the Chat List API (GetMyChats) to show the correct preview and order.
+	if err := c.DB.Model(&models.ChatRoom{}).Where("id = ?", wsMsg.ChatRoomID).Updates(map[string]interface{}{
+		"last_message_content": wsMsg.Content,
+		"last_message_at":      time.Now(),
+	}).Error; err != nil {
+		log.Printf("Error updating chat room metadata: %v", err)
+	}
 }
 
 func (c *Client) processReadReceipt(wsMsg *WSMessage) {
