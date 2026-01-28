@@ -51,11 +51,8 @@ func (h *ChatHandler) Handler() fiber.Handler {
 			DB:     h.DB, // Pass DB connection
 		}
 
-		// Register to Hub
+		// Register to Hub (this will trigger limitRegister which sends unread messages)
 		client.Hub.Register <- client
-
-		// Send offline/unread messages
-		go client.SendUnreadMessages()
 
 		// Start Pumps
 		go client.WritePump()
@@ -138,5 +135,103 @@ func (h *ChatHandler) InitPrivateChat(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"room_id": newRoom.ID,
 		"created": true,
+	})
+}
+
+// GetChatMessages retrieves messages for a specific chat room
+func (h *ChatHandler) GetChatMessages(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(uint)
+	roomID, err := c.ParamsInt("roomID")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid room ID"})
+	}
+
+	// 1. Verify User is Participant
+	var count int64
+	h.DB.Model(&models.ChatParticipant{}).
+		Where("chat_room_id = ? AND user_id = ?", roomID, userID).
+		Count(&count)
+
+	if count == 0 {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You are not a member of this chat room"})
+	}
+
+	// 2. Fetch Messages
+	var messages []models.Message
+	// Pagination
+	limit := c.QueryInt("limit", 50)
+	offset := c.QueryInt("offset", 0)
+
+	if err := h.DB.Preload("Sender").
+		Where("chat_room_id = ?", roomID).
+		Order("created_at DESC"). // Newest first
+		Limit(limit).
+		Offset(offset).
+		Find(&messages).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch messages"})
+	}
+
+	// Reverse to Oldest First for Chat UI usually, or keep Newest First and Client reverses
+	// Let's keep Newest First (Desc) as it's standard for pagination, Client should handle display order.
+
+	return c.JSON(fiber.Map{
+		"messages": messages,
+	})
+}
+
+// GetRoomStatus returns who is currently online/active in a specific chat room
+func (h *ChatHandler) GetRoomStatus(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(uint)
+	roomID, err := c.ParamsInt("roomID")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid room ID"})
+	}
+
+	// 1. Verify User is Participant
+	var count int64
+	h.DB.Model(&models.ChatParticipant{}).
+		Where("chat_room_id = ? AND user_id = ?", roomID, userID).
+		Count(&count)
+
+	if count == 0 {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You are not a member of this chat room"})
+	}
+
+	// 2. Get all participants in this room
+	var participants []models.ChatParticipant
+	h.DB.Where("chat_room_id = ?", roomID).Find(&participants)
+
+	// 3. Get users currently active in this room from WebSocket hub
+	usersInRoom := h.Hub.GetUsersInRoom(uint(roomID))
+	usersInRoomMap := make(map[uint]bool)
+	for _, uid := range usersInRoom {
+		usersInRoomMap[uid] = true
+	}
+
+	// 4. Build response with status for each participant
+	type UserRoomStatus struct {
+		UserID   uint `json:"user_id"`
+		InRoom   bool `json:"in_room"`
+		IsOnline bool `json:"is_online"`
+	}
+
+	var statuses []UserRoomStatus
+	for _, p := range participants {
+		// Check if user is currently in this specific room
+		inRoom := usersInRoomMap[p.UserID]
+
+		// Check if user is online (has any active WebSocket connection) - in-memory check
+		isOnline := h.Hub.IsUserOnline(p.UserID)
+
+		statuses = append(statuses, UserRoomStatus{
+			UserID:   p.UserID,
+			InRoom:   inRoom,
+			IsOnline: isOnline,
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"room_id":  roomID,
+		"statuses": statuses,
 	})
 }

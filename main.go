@@ -114,6 +114,8 @@ func main() {
 	// Chat Routes (Protected)
 	chat := api.Group("/chat", utils.AuthMiddleware)
 	chat.Post("/private", chatHandler.InitPrivateChat)
+	chat.Get("/room/:roomID/messages", chatHandler.GetChatMessages)
+	chat.Get("/room/:roomID/status", chatHandler.GetRoomStatus)
 
 	// Middleware for WebSocket Upgrade & Auth
 	app.Use("/ws", func(c *fiber.Ctx) error {

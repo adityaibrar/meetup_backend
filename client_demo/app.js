@@ -88,6 +88,14 @@ async function startChat() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
 
+        // Leave previous room if any
+        if (state.activeRoom && state.ws && state.ws.readyState === WebSocket.OPEN) {
+            state.ws.send(JSON.stringify({
+                type: 'leave_room',
+                chat_room_id: state.activeRoom
+            }));
+        }
+
         state.activeRoom = data.room_id;
         currentChatUserId = targetUserId; // Track who we are chatting with
 
@@ -97,8 +105,16 @@ async function startChat() {
         // Check current status if known, else default to offline
         updateStatusUI(userStatusMap[targetUserId] || false);
 
-        // Connect WS if not already connected
-        if (!state.ws) connectWebSocket();
+        // Connect WS if not already connected, then join room after connected
+        if (!state.ws) {
+            connectWebSocket(() => {
+                // After connected, join the room
+                joinRoom(data.room_id);
+            });
+        } else if (state.ws.readyState === WebSocket.OPEN) {
+            // Already connected, join the room immediately
+            joinRoom(data.room_id);
+        }
 
         addSystemMessage(`Joined Room ${data.room_id}`);
     } catch (err) {
@@ -106,12 +122,27 @@ async function startChat() {
     }
 }
 
-function connectWebSocket() {
+// Function to send join_room message to server
+function joinRoom(roomId) {
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+
+    state.ws.send(JSON.stringify({
+        type: 'join_room',
+        chat_room_id: roomId
+    }));
+    console.log(`Sent join_room for room ${roomId}`);
+}
+
+function connectWebSocket(onConnected) {
     state.ws = new WebSocket(`${WS_URL}?token=${state.token}`);
 
     state.ws.onopen = () => {
         console.log('Connected to WebSocket');
         addSystemMessage('Connected to server');
+        // Call the callback after connection is established
+        if (onConnected && typeof onConnected === 'function') {
+            onConnected();
+        }
     };
 
     state.ws.onmessage = (event) => {
@@ -164,16 +195,37 @@ function sendMessage() {
 function handleIncomingMessage(msg) {
     if (msg.type === 'chat') {
         const messageData = msg.message;
-        addMessageToUI(messageData);
+        const chatRoomId = msg.chat_room_id;
 
-        // Send Read Receipt immediately (Ephemeral logic) if it's not me
-        if (messageData.sender_id !== state.user.id) {
-            sendReadReceipt(messageData.id);
+        // Only display and mark as read if we're currently viewing this room
+        if (state.activeRoom === chatRoomId) {
+            addMessageToUI(messageData);
+
+            // Send Read Receipt immediately (Ephemeral logic) if it's not my message
+            if (messageData.sender_id !== state.user.id) {
+                sendReadReceipt(messageData.id);
+            }
+        } else {
+            // Message is for a different room - store for later or notify
+            console.log(`New message in room ${chatRoomId} (not currently active)`);
+            // You could show a notification here, e.g.:
+            // showNotification(`New message from User ${messageData.sender_id}`);
         }
     } else if (msg.type === 'read_receipt') {
         markMessageAsRead(msg.message_id);
     } else if (msg.type === 'user_status') {
         updateUserStatus(msg.user_id, msg.is_online);
+    } else if (msg.type === 'online_users_list') {
+        // Handle initial list of online users
+        if (msg.user_ids && Array.isArray(msg.user_ids)) {
+            msg.user_ids.forEach(userId => {
+                userStatusMap[userId] = true;
+            });
+            // Update UI if we're chatting with someone
+            if (currentChatUserId && userStatusMap[currentChatUserId]) {
+                updateStatusUI(true);
+            }
+        }
     }
 }
 
