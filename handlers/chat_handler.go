@@ -103,6 +103,14 @@ func (h *ChatHandler) InitPrivateChat(c *fiber.Ctx) error {
 	}
 
 	if roomID != 0 {
+		// Found existing room!
+		// Logic: User might have deleted this chat previously (Soft Delete).
+		// We must ensure the user is "active" in this room again.
+		// Restore participation if soft-deleted.
+		h.DB.Unscoped().Model(&models.ChatParticipant{}).
+			Where("chat_room_id = ? AND user_id = ?", roomID, userID).
+			Update("deleted_at", nil)
+
 		return c.JSON(fiber.Map{
 			"room_id": roomID,
 			"created": false,
@@ -173,7 +181,7 @@ func (h *ChatHandler) GetMyChats(c *fiber.Ctx) error {
 		JOIN chat_participants cp ON cr.id = cp.chat_room_id
 		LEFT JOIN chat_participants cp_other ON cr.id = cp_other.chat_room_id AND cp_other.user_id != ?
 		LEFT JOIN users u ON cp_other.user_id = u.id
-		WHERE cp.user_id = ?
+		WHERE cp.user_id = ? AND cp.deleted_at IS NULL
 		ORDER BY cr.last_message_at DESC
 	`
 

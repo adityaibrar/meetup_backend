@@ -193,10 +193,21 @@ func (c *Client) broadcastRoomStatus(roomID uint, inRoom bool) {
 
 func (c *Client) processChatMessage(wsMsg *WSMessage) {
 	// 1. Find Chat Room and Participants (needed to know who to send to)
+	// 1. Find Chat Room and Participants (needed to know who to send to)
 	var room models.ChatRoom
-	if err := c.DB.Preload("Participants").First(&room, wsMsg.ChatRoomID).Error; err != nil {
+	// Use Unscoped to find ALL participants, including those who deleted the chat (Soft Delete)
+	if err := c.DB.Unscoped().Preload("Participants").First(&room, wsMsg.ChatRoomID).Error; err != nil {
 		log.Printf("Error finding chat room: %v", err)
 		return
+	}
+
+	// Restore soft-deleted participants (logic: if new message comes, chat is active again)
+	for _, p := range room.Participants {
+		if p.DeletedAt.Valid {
+			// Restore
+			c.DB.Unscoped().Model(&p).Update("deleted_at", nil)
+			log.Printf("Restored participation for user %d in room %d", p.UserID, room.ID)
+		}
 	}
 
 	// 2. Determine Recipient

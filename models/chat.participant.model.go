@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type ChatParticipant struct {
 	ID         uint `gorm:"primaryKey" json:"id"`
@@ -8,8 +12,9 @@ type ChatParticipant struct {
 	UserID     uint `gorm:"index" json:"user_id"`
 
 	// Metadata member
-	Role     string    `gorm:"default:'member'" json:"role"` // 'admin', 'member' (berguna untuk group)
-	JoinedAt time.Time `gorm:"autoCreateTime" json:"joined_at"`
+	Role      string         `gorm:"default:'member'" json:"role"` // 'admin', 'member' (berguna untuk group)
+	JoinedAt  time.Time      `gorm:"autoCreateTime" json:"joined_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// Relasi
 	User     User     `gorm:"foreignKey:UserID" json:"user"`
