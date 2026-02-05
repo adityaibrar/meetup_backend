@@ -102,6 +102,12 @@ func main() {
 
 	authHandler := handlers.NewAuthHandler(db)
 	chatHandler := handlers.NewChatHandler(hub, db)
+	userHandler := handlers.NewUserHandler(db)
+	productHandler := handlers.NewProductHandler(db)
+	uploadHandler := handlers.NewUploadHandler()
+
+	// Serve Static Files (Uploads)
+	app.Static("/uploads", "./uploads")
 
 	// API Routes
 	api := app.Group("/api")
@@ -111,9 +117,27 @@ func main() {
 	auth.Post("/register", authHandler.Register)
 	auth.Post("/login", authHandler.Login)
 
+	// User Routes (Protected)
+	users := api.Group("/users", utils.AuthMiddleware)
+	users.Get("/search", userHandler.SearchUsers)
+
+	// Product Routes
+	products := api.Group("/products")
+	products.Get("/", productHandler.GetAllProducts)                            // Public
+	products.Get("/:id", productHandler.GetProduct)                             // Public
+	products.Post("/", utils.AuthMiddleware, productHandler.CreateProduct)      // Protected
+	products.Delete("/:id", utils.AuthMiddleware, productHandler.DeleteProduct) // Protected
+
+	// Upload Route (Protected)
+	api.Post("/upload", utils.AuthMiddleware, uploadHandler.UploadImage)
+
 	// Chat Routes (Protected)
 	chat := api.Group("/chat", utils.AuthMiddleware)
+	chat.Get("/rooms", chatHandler.GetMyChats) // Get list of chats
 	chat.Post("/private", chatHandler.InitPrivateChat)
+	chat.Get("/room/:roomID/messages", chatHandler.GetChatMessages)
+	chat.Get("/room/:roomID/status", chatHandler.GetRoomStatus)
+	chat.Delete("/room/:roomID", chatHandler.DeleteChat) // Delete chat route
 
 	// Middleware for WebSocket Upgrade & Auth
 	app.Use("/ws", func(c *fiber.Ctx) error {
