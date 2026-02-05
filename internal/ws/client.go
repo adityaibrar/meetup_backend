@@ -54,6 +54,7 @@ type WSMessage struct {
 	Content     string          `json:"content,omitempty"`
 	MessageID   uint            `json:"message_id,omitempty"` // Used for 'read' receipts
 	Payload     json.RawMessage `json:"payload,omitempty"`    // Flexible payload
+	Product     json.RawMessage `json:"product,omitempty"`    // Product snapshot
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -233,6 +234,7 @@ func (c *Client) processChatMessage(wsMsg *WSMessage) {
 			"is_read":      true, // Already read since recipient is in room
 			"created_at":   time.Now(),
 			"sender":       sender,
+			"product":      wsMsg.Product,
 		}
 
 		responseJSON, _ := json.Marshal(map[string]interface{}{
@@ -240,6 +242,7 @@ func (c *Client) processChatMessage(wsMsg *WSMessage) {
 			"message":      tempMsg,
 			"sender_id":    c.UserID,
 			"chat_room_id": wsMsg.ChatRoomID,
+			"product":      wsMsg.Product, // Include top-level for convenience if needed, but message.product is better
 		})
 
 		// Send to recipient
@@ -252,11 +255,12 @@ func (c *Client) processChatMessage(wsMsg *WSMessage) {
 	} else {
 		// CASE 2: Recipient NOT in room - Save to database for later retrieval
 		newMsg := models.Message{
-			ChatRoomID: wsMsg.ChatRoomID,
-			SenderID:   c.UserID,
-			Content:    wsMsg.Content,
-			IsRead:     false,
-			Sender:     sender,
+			ChatRoomID:  wsMsg.ChatRoomID,
+			SenderID:    c.UserID,
+			Content:     wsMsg.Content,
+			IsRead:      false,
+			Sender:      sender,
+			ProductInfo: string(wsMsg.Product),
 		}
 
 		if err := c.DB.Omit("Sender").Create(&newMsg).Error; err != nil {
@@ -270,6 +274,7 @@ func (c *Client) processChatMessage(wsMsg *WSMessage) {
 			"message":      newMsg,
 			"sender_id":    c.UserID,
 			"chat_room_id": wsMsg.ChatRoomID,
+			"product":      wsMsg.Product, // Explicitly send as JSON object so client sees it
 		})
 
 		// Echo back to sender so they see it (Unread) and have the ID for future read receipt

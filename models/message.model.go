@@ -15,6 +15,8 @@ type Message struct {
 	MediaType string `gorm:"default:'text'" json:"media_type"` // 'text', 'image', 'video', 'file'
 	MediaURL  string `json:"media_url,omitempty"`              // Jika kirim gambar/file
 
+	ProductInfo string `gorm:"type:text" json:"product_info"` // Snapshot product data
+
 	IsRead bool `gorm:"default:false" json:"is_read"` // Sederhana (bagus untuk Private Chat)
 
 	CreatedAt time.Time      `json:"created_at"`

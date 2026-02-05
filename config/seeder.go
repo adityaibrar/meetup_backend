@@ -70,6 +70,7 @@ func SeedProducts(db *gorm.DB) {
 			Category:    "beverages",
 			Condition:   "new",
 			Status:      "available",
+			ImageURL:    "https://images.unsplash.com/photo-1543253687-c599f5e08fd8?auto=format&fit=crop&w=600",
 		},
 		{
 			SellerID:    user1.ID,
@@ -79,6 +80,7 @@ func SeedProducts(db *gorm.DB) {
 			Category:    "beverages",
 			Condition:   "new",
 			Status:      "available",
+			ImageURL:    "https://images.unsplash.com/photo-1613478223719-2ab802602423?auto=format&fit=crop&w=600",
 		},
 		{
 			SellerID:    user2.ID,
@@ -88,6 +90,7 @@ func SeedProducts(db *gorm.DB) {
 			Category:    "food",
 			Condition:   "new",
 			Status:      "available",
+			ImageURL:    "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=600",
 		},
 		{
 			SellerID:    user2.ID,
@@ -97,6 +100,7 @@ func SeedProducts(db *gorm.DB) {
 			Category:    "food",
 			Condition:   "new",
 			Status:      "available",
+			ImageURL:    "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=600",
 		},
 	}
 
