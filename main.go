@@ -104,6 +104,7 @@ func main() {
 	chatHandler := handlers.NewChatHandler(hub, db)
 	userHandler := handlers.NewUserHandler(db)
 	productHandler := handlers.NewProductHandler(db)
+	categoryHandler := handlers.NewCategoryHandler(db)
 	uploadHandler := handlers.NewUploadHandler()
 
 	// Serve Static Files (Uploads)
@@ -121,15 +122,29 @@ func main() {
 	users := api.Group("/users", utils.AuthMiddleware)
 	users.Get("/search", userHandler.SearchUsers)
 
+	// Category Routes
+	api.Get("/categories", categoryHandler.GetCategories)
+
 	// Product Routes
 	products := api.Group("/products")
 	products.Get("/", productHandler.GetAllProducts)                            // Public
 	products.Get("/:id", productHandler.GetProduct)                             // Public
 	products.Post("/", utils.AuthMiddleware, productHandler.CreateProduct)      // Protected
+	products.Put("/:id", utils.AuthMiddleware, productHandler.UpdateProduct)    // Protected
 	products.Delete("/:id", utils.AuthMiddleware, productHandler.DeleteProduct) // Protected
+
+	// My Products (Protected) - Must be before /:id to avoid conflict if logic wasn't strict (though here it's fine as "my-products" is not int)
+	// Actually, better to put it under a separate group or ensure no conflict.
+	// Since /products/:id expects ID, "my-products" might be treated as ID if not numeric check?
+	// To be safe, let's use a specific route that doesn't conflict or put it before /:id.
+	// /api/my-products is cleaner if we move it out of /products or just put above.
+	// User requested "GET /api/my-products", so let's register it at root api group or under /products/my (which would be /api/products/my)
+	// The plan said: "Register the new route GET /api/my-products (protected)"
+	api.Get("/my-products", utils.AuthMiddleware, productHandler.GetMyProducts)
 
 	// Upload Route (Protected)
 	api.Post("/upload", utils.AuthMiddleware, uploadHandler.UploadImage)
+	api.Post("/upload/multiple", utils.AuthMiddleware, uploadHandler.UploadMultipleImages)
 
 	// Chat Routes (Protected)
 	chat := api.Group("/chat", utils.AuthMiddleware)

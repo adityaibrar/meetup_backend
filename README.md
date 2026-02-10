@@ -53,9 +53,11 @@ A simple **HTML/JS Client Demo** is also included.
 
 ## 📖 API Usage
 
+**Full API Documentation**: See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for detailed endpoint usage.
+
 **Base URL**: `http://localhost:8000`
 
-### 1. Authentication
+### Quick Start
 
 #### Register
 Create a new user account.

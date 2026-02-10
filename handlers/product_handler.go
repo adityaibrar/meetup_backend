@@ -18,12 +18,13 @@ func NewProductHandler(db *gorm.DB) *ProductHandler {
 
 // CreateProductRequest
 type CreateProductRequest struct {
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Price       float64 `json:"price"`
-	Category    string  `json:"category"`
-	Condition   string  `json:"condition"`
-	ImageURL    string  `json:"image_url"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Price       float64  `json:"price"`
+	Category    string   `json:"category"`
+	Condition   string   `json:"condition"`
+	ImageURL    string   `json:"image_url"`
+	Images      []string `json:"images"`
 }
 
 // CreateProduct - POST /api/products
@@ -43,6 +44,7 @@ func (h *ProductHandler) CreateProduct(c *fiber.Ctx) error {
 		Category:    req.Category,
 		Condition:   req.Condition,
 		ImageURL:    req.ImageURL,
+		Images:      req.Images,
 		Status:      "available",
 	}
 
@@ -97,7 +99,15 @@ func (h *ProductHandler) GetProduct(c *fiber.Ctx) error {
 // DeleteProduct - DELETE /api/products/:id
 func (h *ProductHandler) DeleteProduct(c *fiber.Ctx) error {
 	id, _ := strconv.Atoi(c.Params("id"))
-	userID := c.Locals("user_id").(uint)
+	userIDVal := c.Locals("user_id")
+	var userID uint
+	if idVal, ok := userIDVal.(uint); ok {
+		userID = idVal
+	} else if idVal, ok := userIDVal.(float64); ok {
+		userID = uint(idVal)
+	} else {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid user session"})
+	}
 
 	var product models.Product
 	if err := h.DB.First(&product, id).Error; err != nil {
@@ -115,4 +125,72 @@ func (h *ProductHandler) DeleteProduct(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "Product deleted"})
+}
+
+// GetMyProducts - GET /api/my-products
+func (h *ProductHandler) GetMyProducts(c *fiber.Ctx) error {
+	userIDVal := c.Locals("user_id")
+	var userID uint
+
+	if id, ok := userIDVal.(uint); ok {
+		userID = id
+	} else if id, ok := userIDVal.(float64); ok {
+		userID = uint(id)
+	} else {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid user session"})
+	}
+
+	var products []models.Product
+
+	if err := h.DB.Preload("Seller", func(db *gorm.DB) *gorm.DB {
+		return db.Select("id, username, full_name, image_url")
+	}).Where("seller_id = ? AND status = ?", userID, "available").Order("created_at desc").Find(&products).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not fetch products"})
+	}
+
+	return c.JSON(fiber.Map{"data": products})
+}
+
+// UpdateProduct - PUT /api/products/:id
+func (h *ProductHandler) UpdateProduct(c *fiber.Ctx) error {
+	id, _ := strconv.Atoi(c.Params("id"))
+	userIDVal := c.Locals("user_id")
+	var userID uint
+	if idVal, ok := userIDVal.(uint); ok {
+		userID = idVal
+	} else if idVal, ok := userIDVal.(float64); ok {
+		userID = uint(idVal)
+	} else {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid user session"})
+	}
+
+	var product models.Product
+	if err := h.DB.First(&product, id).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
+	}
+
+	// Check ownership
+	if product.SellerID != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized"})
+	}
+
+	var req CreateProductRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
+	}
+
+	// Update fields
+	product.Title = req.Title
+	product.Description = req.Description
+	product.Price = req.Price
+	product.Category = req.Category
+	product.Condition = req.Condition
+	product.ImageURL = req.ImageURL
+	product.Images = req.Images
+
+	if err := h.DB.Save(&product).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update product"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Product updated", "data": product})
 }

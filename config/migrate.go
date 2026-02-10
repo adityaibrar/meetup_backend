@@ -15,6 +15,7 @@ func Migrate(db *gorm.DB) error {
 		&models.ChatParticipant{},
 		&models.Message{},
 		&models.Product{},
+		&models.Category{},
 	)
 
 	if err != nil {
@@ -23,6 +24,10 @@ func Migrate(db *gorm.DB) error {
 	}
 
 	log.Println("Database Migrations completed succesfully...")
+
+	// Ensure categories are seeded even on normal migration
+	SeedCategories(db)
+
 	return err
 }
 
@@ -34,6 +39,7 @@ func ResetAndMigrate(db *gorm.DB) error {
 		&models.ChatParticipant{},
 		&models.Message{},
 		&models.Product{},
+		&models.Category{},
 	}
 
 	if err := db.Migrator().DropTable(models...); err != nil {
@@ -49,6 +55,7 @@ func ResetAndMigrate(db *gorm.DB) error {
 	}
 
 	// Seed Users
+	SeedCategories(db)
 	SeedUsers(db)
 	SeedProducts(db)
 
