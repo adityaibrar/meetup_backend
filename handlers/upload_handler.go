@@ -54,3 +54,41 @@ func (h *UploadHandler) UploadImage(c *fiber.Ctx) error {
 		"url": imageURL,
 	})
 }
+
+// UploadMultipleImages handles multiple image uploads
+func (h *UploadHandler) UploadMultipleImages(c *fiber.Ctx) error {
+	form, err := c.MultipartForm()
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Multipart form parse error"})
+	}
+
+	files := form.File["images"]
+	if len(files) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Images are required"})
+	}
+
+	var urls []string
+
+	for _, file := range files {
+		// Validate file type
+		ext := filepath.Ext(file.Filename)
+		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" {
+			continue // Skip invalid files or return error
+		}
+
+		// Generate unique filename
+		filename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), file.Filename)
+		destination := fmt.Sprintf("./uploads/products/%s", filename)
+
+		if err := c.SaveFile(file, destination); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not save file"})
+		}
+
+		imageURL := fmt.Sprintf("/uploads/products/%s", filename)
+		urls = append(urls, imageURL)
+	}
+
+	return c.JSON(fiber.Map{
+		"urls": urls,
+	})
+}

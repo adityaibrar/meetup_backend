@@ -92,10 +92,11 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"token": t,
 		"user": fiber.Map{
-			"id":       user.ID,
-			"username": user.Username,
-			"email":    user.Email,
-			"role":     user.Role,
+			"id":        user.ID,
+			"username":  user.Username,
+			"email":     user.Email,
+			"role":      user.Role,
+			"image_url": user.ImageURL,
 		},
 	})
 }
