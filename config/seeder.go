@@ -20,6 +20,7 @@ func SeedUsers(db *gorm.DB) {
 			Password: password,
 			FullName: "User One",
 			Role:     "user",
+			Points:   10,
 		},
 		{
 			Username: "user2",
@@ -27,6 +28,7 @@ func SeedUsers(db *gorm.DB) {
 			Password: password,
 			FullName: "User Two",
 			Role:     "user",
+			Points:   10,
 		},
 	}
 

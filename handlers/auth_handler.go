@@ -52,6 +52,7 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		Password: hashedPassword,
 		FullName: req.FullName,
 		Role:     "user",
+		Points:   10,
 	}
 
 	if err := h.DB.Create(&user).Error; err != nil {
@@ -97,6 +98,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 			"email":     user.Email,
 			"role":      user.Role,
 			"image_url": user.ImageURL,
+			"points":    user.Points,
 		},
 	})
 }

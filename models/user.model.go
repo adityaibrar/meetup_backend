@@ -23,6 +23,7 @@ type User struct {
 	Role       string `gorm:"default:'user';size:20" json:"role"` // user, admin, moderator
 	IsVerified bool   `gorm:"default:false" json:"is_verified"`
 	IsOnline   bool   `gorm:"default:false" json:"is_online"`
+	Points     int    `gorm:"default:10" json:"points"`
 
 	// Lokasi (Indexed untuk performa pencarian geospasial)
 	Latitude  float64 `gorm:"index:idx_location" json:"latitude"`
