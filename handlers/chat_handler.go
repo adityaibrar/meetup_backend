@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"log"
 	"meetup_backend/internal/ws"
 	"meetup_backend/models"
@@ -338,4 +339,163 @@ func (h *ChatHandler) DeleteChat(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"message": "Chat deleted successfully",
 	})
+}
+
+// ToggleMeetupReadyRequest defines payload for toggling ready state
+type ToggleMeetupReadyRequest struct {
+	RoomID uint `json:"room_id"`
+}
+
+// ToggleMeetupReady handles the logic for a user signaling they are ready to meet
+func (h *ChatHandler) ToggleMeetupReady(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(uint)
+	var req ToggleMeetupReadyRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
+	}
+
+	// 1. Check User Points
+	var user models.User
+	if err := h.DB.First(&user, userID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	if user.Points < 5 {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Insufficient points. You need 5 points."})
+	}
+
+	// 2. Get Chat Room
+	var room models.ChatRoom
+	if err := h.DB.Preload("Participants").First(&room, req.RoomID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Chat room not found"})
+	}
+
+	// Verify user is participant
+	isParticipant := false
+	for _, p := range room.Participants {
+		if p.UserID == userID {
+			isParticipant = true
+			break
+		}
+	}
+	if !isParticipant {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not a participant"})
+	}
+
+	// 3. Toggle Ready State
+	var readyUserIDs []uint
+	if room.MeetupReadyUserIDs != "" {
+		if err := json.Unmarshal([]byte(room.MeetupReadyUserIDs), &readyUserIDs); err != nil {
+			// If error, assume empty
+			readyUserIDs = []uint{}
+		}
+	}
+
+	// Check if already ready
+	alreadyReady := false
+	for i, uid := range readyUserIDs {
+		if uid == userID {
+			// Remove from list (User cancelled)
+			readyUserIDs = append(readyUserIDs[:i], readyUserIDs[i+1:]...)
+			alreadyReady = true
+			break
+		}
+	}
+
+	if !alreadyReady {
+		// Add to list
+		readyUserIDs = append(readyUserIDs, userID)
+	}
+
+	// Save new state
+	newStateJSON, _ := json.Marshal(readyUserIDs)
+	room.MeetupReadyUserIDs = string(newStateJSON)
+	if err := h.DB.Save(&room).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update room state"})
+	}
+
+	// 4. Check if MUTUAL AGREEMENT (Both users ready)
+	// Private chat has exactly 2 participants
+	if len(readyUserIDs) >= 2 {
+		return h.handleMeetupAgreement(c, &room, readyUserIDs)
+	}
+
+	// 5. Broadcast Status Update (One user ready, or user cancelled)
+	h.broadcastMeetupUpdate(room.ID, readyUserIDs)
+
+	return c.JSON(fiber.Map{
+		"message":   "Meetup status updated",
+		"ready_ids": readyUserIDs,
+		"confirmed": false,
+	})
+}
+
+// handleMeetupAgreement executes the point deduction and confirmation
+func (h *ChatHandler) handleMeetupAgreement(c *fiber.Ctx, room *models.ChatRoom, readyUserIDs []uint) error {
+	tx := h.DB.Begin()
+
+	// Deterime cost
+	cost := 5
+
+	// Deduct points from ALL ready users (should be 2)
+	for _, uid := range readyUserIDs {
+		if err := tx.Model(&models.User{}).Where("id = ?", uid).Update("points", gorm.Expr("points - ?", cost)).Error; err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to deduct points"})
+		}
+	}
+
+	// Reset Ready State
+	room.MeetupReadyUserIDs = "[]" // Reset to empty array
+	if err := tx.Save(room).Error; err != nil {
+		tx.Rollback()
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to reset room"})
+	}
+
+	tx.Commit()
+
+	// Broadcast CONFIRMATION
+	h.broadcastMeetupConfirmed(room.ID)
+
+	return c.JSON(fiber.Map{
+		"message":   "Meetup confirmed! Points deducted.",
+		"confirmed": true,
+	})
+}
+
+// broadcastMeetupUpdate notifies room participants of current ready status
+func (h *ChatHandler) broadcastMeetupUpdate(roomID uint, readyUserIDs []uint) {
+	msgJSON, _ := json.Marshal(map[string]interface{}{
+		"type":           "meetup_update",
+		"chat_room_id":   roomID,
+		"ready_user_ids": readyUserIDs,
+	})
+
+	// Get participants to notify
+	// users := h.Hub.GetUsersInRoom(roomID) // This gets ACTIVE users in room
+	// We should try to notify ALL participants even if not in room (push notif logic usually),
+	// but for WebSocket we iterate active connections or query DB.
+	// Hub's GetUsersInRoom might miss users who are online but on home screen?
+	// The frontend handles global events if connected.
+
+	// Better: Notify ALL participants of the room
+	var room models.ChatRoom
+	h.DB.Preload("Participants").First(&room, roomID)
+	for _, p := range room.Participants {
+		h.Hub.SendToUser(p.UserID, msgJSON)
+	}
+}
+
+// broadcastMeetupConfirmed notifies room that meetup is ON
+func (h *ChatHandler) broadcastMeetupConfirmed(roomID uint) {
+	msgJSON, _ := json.Marshal(map[string]interface{}{
+		"type":         "meetup_confirmed",
+		"chat_room_id": roomID,
+	})
+
+	var room models.ChatRoom
+	h.DB.Preload("Participants").First(&room, roomID)
+	for _, p := range room.Participants {
+		h.Hub.SendToUser(p.UserID, msgJSON)
+	}
 }

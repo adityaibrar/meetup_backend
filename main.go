@@ -153,6 +153,7 @@ func main() {
 	chat.Get("/room/:roomID/messages", chatHandler.GetChatMessages)
 	chat.Get("/room/:roomID/status", chatHandler.GetRoomStatus)
 	chat.Delete("/room/:roomID", chatHandler.DeleteChat) // Delete chat route
+	chat.Post("/toggle-ready", chatHandler.ToggleMeetupReady)
 
 	// Middleware for WebSocket Upgrade & Auth
 	app.Use("/ws", func(c *fiber.Ctx) error {
